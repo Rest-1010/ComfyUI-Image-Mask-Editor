@@ -52,7 +52,17 @@ git clone https://github.com/Rest-1010/ComfyUI-Image-Mask-Editor.git
 
 - `image`入力は任意です。接続した画像は実行後に読み込み画面へ表示されます。
 - IMAGE/MASK出力をインペイントの生成処理へ接続します。`width` / `height` のINT出力は右側のIMAGE出力の実サイズで、生成処理の幅・高さへ接続できます。
-- 生成結果を左側へ戻す場合は、VAE DecodeのIMAGE出力を **Image & Mask Editor — Result Preview** の`image`へ接続し、`target`で編集ノードのIDを選びます。生成結果を編集ノードの入力へ直接戻す接続は避けてください。
+
+> [!IMPORTANT]
+> **生成結果を読み込み画面へ戻す接続方法**
+>
+> 生成結果を左側へ戻す場合は、VAE DecodeのIMAGE出力を **Image & Mask Editor — Result Preview** の`image`へ接続し、`target`で編集ノードのIDを選びます。**生成結果を編集ノードの入力へ直接戻す接続は避けてください。**
+
+### 接続例
+
+<a href="images/workflow-example.png"><img src="images/workflow-example.png" alt="Image & Mask Editorのワークフロー接続例" width="800"></a>
+
+画像をクリックすると元のサイズで確認できます。
 
 ## 注意事項
 
