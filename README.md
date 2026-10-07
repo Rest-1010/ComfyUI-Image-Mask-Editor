@@ -53,10 +53,12 @@ git clone https://github.com/Rest-1010/ComfyUI-Image-Mask-Editor.git
 - `image`入力は任意です。接続した画像は実行後に読み込み画面へ表示されます。
 - IMAGE/MASK出力をインペイントの生成処理へ接続します。`width` / `height` のINT出力は右側のIMAGE出力の実サイズで、生成処理の幅・高さへ接続できます。
 
+マスクを設定した部分だけを再生成したい場合は、[ComfyUI-Inpaint-CropAndStitch](https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch)などのノードを組み合わせると便利です。マスク周辺を切り出して生成し、元の画像へ合成できます。
+
 > [!IMPORTANT]
 > **生成結果を読み込み画面へ戻す接続方法**
 >
-> 生成結果を左側へ戻す場合は、VAE DecodeのIMAGE出力を **Image & Mask Editor — Result Preview** の`image`へ接続し、`target`で編集ノードのIDを選びます。**生成結果を編集ノードの入力へ直接戻す接続は避けてください。**
+> 生成結果を読み込み画面へ戻す場合は、VAE DecodeのIMAGE出力を **Image & Mask Editor — Result Preview** の`image`へ接続し、`target`で編集ノードのIDを選びます。**生成結果を編集ノードの入力へ直接戻す接続は避けてください。**
 
 ### 接続例
 
