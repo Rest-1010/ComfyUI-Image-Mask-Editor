@@ -45,8 +45,8 @@ test("non-file drags are left alone", async () => {
   await editor.dropImage(event);
   assert.equal(event.prevented, false);
 });
-test("release version is recorded as 1.0.4", () => {
-  assert.equal(readFileSync(join(__dirname, "../VERSION"), "utf8").trim(), "1.0.4");
+test("release version is recorded as 1.0.5", () => {
+  assert.equal(readFileSync(join(__dirname, "../VERSION"), "utf8").trim(), "1.0.5");
 });
 
 test("drag highlight survives child crossings and clears on exit and drop", async () => {
