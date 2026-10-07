@@ -8,6 +8,10 @@ AUTOMATIC1111やForgeのInpaint Sketchのように、画像へ色を描き込み
 
 読み込み・生成結果のプレビューと編集画面を左右に配置し、生成した画像を編集画面へ送り直して、同じ箇所を繰り返し調整できるようにしています。色を描き込まず、マスクだけを設定することもできます。
 
+![Image & Mask Editorの画面](images/screenshot.png)
+
+左：読み込み画像／右：描画・マスクの編集画面
+
 ## インストール
 
 ComfyUIの`custom_nodes`フォルダで以下を実行し、ComfyUIを再起動してブラウザをCtrl＋F5で更新する。
