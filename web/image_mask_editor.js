@@ -7,6 +7,25 @@ const MIN_HEIGHT = 220;
 const SPLITTER_WIDTH = 10;
 const MIN_PREVIEW_WIDTH = 220;
 const MIN_EDITOR_WIDTH = 450;
+const workflowSessions = new Map();
+
+function workflowEditors() {
+  const root = app.rootGraph || app.graph;
+  const editors = new Map();
+  for (const graph of [root, ...(root.subgraphs?.values() || [])]) {
+    for (const node of graph._nodes) {
+      if (node.sketchEditor) editors.set(`${graph === root ? "root" : graph.id}:${node.id}`, node.sketchEditor);
+    }
+  }
+  return editors;
+}
+
+function pruneWorkflowSessions() {
+  const workflows = app.extensionManager.workflow;
+  for (const workflow of workflowSessions.keys()) {
+    if (!workflows.isOpen(workflow)) workflowSessions.delete(workflow);
+  }
+}
 const ICONS = {
   undo: '<path d="M9 5 4 10l5 5M4 10h9a6 6 0 0 1 0 12"/>',
   redo: '<path d="m15 5 5 5-5 5m5-5h-9a6 6 0 0 0 0 12"/>',
@@ -230,7 +249,12 @@ class ImageMaskEditorUI {
     this.previewMessage.hidden = true;
     this.previewImage.addEventListener("error", () => this.showMissingPreview());
     this.previewImage.addEventListener("load", () => {
-      this.resetPreviewView();
+      if (this.restoredPreviewView) {
+        this.previewZoom = this.restoredPreviewView.zoom;
+        this.previewPan = this.restoredPreviewView.pan;
+        this.restoredPreviewView = null;
+        this.applyPreviewView();
+      } else this.resetPreviewView();
       this.previewMessage.hidden = true;
       this.previewImage.hidden = false;
       this.sendButton.disabled = false;
@@ -647,7 +671,12 @@ class ImageMaskEditorUI {
     });
   }
 
-  async setPreview(url, name = "IMAGE入力") {
+  setPreview(url, name = "IMAGE入力") {
+    this.previewLoad = this.loadPreview(url, name);
+    return this.previewLoad;
+  }
+
+  async loadPreview(url, name) {
     const request = ++this.previewRequest;
     await this.ready;
     let image;
@@ -666,6 +695,7 @@ class ImageMaskEditorUI {
     this.previewKey = canvas.toDataURL("image/png");
     this.previewName = name;
     this.previewSize.textContent = `${image.naturalWidth}×${image.naturalHeight}`;
+    this.restoredPreviewView = null;
     this.previewImage.src = this.previewKey;
     this.previewImage.hidden = false;
     this.previewMessage.hidden = true;
@@ -1040,6 +1070,43 @@ class ImageMaskEditorUI {
     return this.executionData;
   }
 
+  sessionState() {
+    this.finishStroke();
+    return {
+      background:this.background, sourceKey:this.sourceKey, inputKey:this.inputKey,
+      previewKey:this.previewKey, previewName:this.previewName,
+      layers:this.layers, history:this.history, redoHistory:this.redoHistory,
+      zoom:this.zoom, pan:{...this.pan}, previewZoom:this.previewZoom, previewPan:{...this.previewPan},
+      color:this.color.value, size:this.size.value, mode:this.mode, lineTool:this.lineTool,
+    };
+  }
+
+  restoreSession(state) {
+    const {color, size, mode, lineTool, ...images} = state;
+    Object.assign(this, images);
+    this.pendingSource = this.sourceKey;
+    this.color.value = color;
+    this.setBrushSize(size, true);
+    this.setMode(mode);
+    this.lineTool = lineTool;
+    this.lineButton.setAttribute("aria-pressed", String(lineTool));
+    this.editorSize.textContent = this.background ? `${this.background.naturalWidth}×${this.background.naturalHeight}` : "";
+    if (this.previewKey) {
+      this.restoredPreviewView = {zoom:this.previewZoom, pan:{...this.previewPan}};
+      this.previewImage.src = layerUrl(this.previewKey);
+      this.previewCaption.textContent = this.previewName;
+      this.previewMessage.hidden = true;
+      this.previewImage.hidden = false;
+      this.sendButton.disabled = false;
+      this.savePreviewButton.disabled = false;
+    }
+    this.applyPreviewView();
+    this.executionData = null;
+    this.markDirty();
+    this.render();
+    this.updateCursor();
+  }
+
   dispose() {
     if (this.renderFrame != null) cancelAnimationFrame(this.renderFrame);
     this.resizeObserver.disconnect();
@@ -1069,6 +1136,27 @@ app.registerExtension({
   name:"image-mask-editor",
   init() {
     addStyles();
+  },
+  async beforeLoadGraph() {
+    pruneWorkflowSessions();
+    const workflow = app.extensionManager.workflow.activeWorkflow;
+    if (!workflow || !app.extensionManager.workflow.isOpen(workflow)) return;
+    const editors = workflowEditors();
+    await Promise.allSettled([...editors.values()].flatMap(editor => [editor.ready, editor.transfer, editor.previewLoad]));
+    workflowSessions.set(workflow, new Map([...editors].map(([key, editor]) => [key, editor.sessionState()])));
+  },
+  async afterLoadGraph() {
+    pruneWorkflowSessions();
+    const workflow = app.extensionManager.workflow.activeWorkflow;
+    const session = workflowSessions.get(workflow);
+    if (!session) return;
+    for (const [key, editor] of workflowEditors()) {
+      const state = session.get(key);
+      if (!state) continue;
+      await editor.ready;
+      editor.restoreSession(state);
+    }
+    workflowSessions.delete(workflow);
   },
   nodeCreated(node) {
     if (node.comfyClass === "ImageMaskEditorPreview" || node.type === "ImageMaskEditorPreview") {
