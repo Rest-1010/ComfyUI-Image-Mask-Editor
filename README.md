@@ -38,3 +38,9 @@ git clone https://github.com/Rest-1010/ComfyUI-Image-Mask-Editor.git
 - 内部名は`ImageMaskEditor`と`ImageMaskEditorPreview`。旧InpaintSketchノードの登録・別名は残さない。旧名のテストノードは新規配置し直す。バックアップは`ComfyUI/custom_nodes`の外に置く。
 
 更新後はComfyUIを再起動し、ブラウザをCtrl＋F5で再読み込みする。
+
+## ライセンス
+
+Copyright (c) 2026 Rest-1010
+
+このプロジェクトは GNU General Public License v3.0 のみ（SPDX: `GPL-3.0-only`）で公開する。全文は[LICENSE](LICENSE)を参照。
