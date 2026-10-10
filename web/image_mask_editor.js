@@ -1188,12 +1188,75 @@ function labelImageConnectors(slots) {
   }
 }
 
+function configureChoiceButtons(widget) {
+  if (!widget) return;
+  const values = widget.options.values;
+  const height = 44;
+  widget.computeSize = width => [width, height];
+  widget.draw = function(ctx, node, width, y) {
+    ctx.save();
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = this.computedDisabled ? "#777" : "#bbb";
+    ctx.fillText(this.label || this.name, 15, y + 8);
+    const buttonWidth = (width - 34) / values.length;
+    values.forEach((value, index) => {
+      const x = 15 + index * buttonWidth;
+      const selected = this.value === value;
+      ctx.fillStyle = this.computedDisabled ? "#303030" : selected ? "#355e80" : "#303030";
+      ctx.strokeStyle = this.computedDisabled ? "#444" : selected ? "#82b9e4" : "#555";
+      ctx.beginPath();
+      ctx.roundRect(x, y + 18, buttonWidth - 4, 22, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "center";
+      ctx.fillStyle = this.computedDisabled ? "#777" : selected ? "#fff" : "#bbb";
+      ctx.fillText(value, x + (buttonWidth - 4) / 2, y + 29, buttonWidth - 10);
+    });
+    ctx.restore();
+  };
+  widget.drawWidget = function(ctx, {width}) {this.draw(ctx, this.node, width, this.y);};
+  const pick = (x, y, node, event, canvas) => {
+    if (widget.disabled || widget.computedDisabled || (event.button != null && event.button !== 0)) return false;
+    const width = widget.width || node.size[0];
+    const top = widget.y ?? widget.last_y;
+    const buttonWidth = (width - 34) / values.length;
+    const index = Math.floor((x - 15) / buttonWidth);
+    if (y < top + 18 || y > top + 40 || index < 0 || index >= values.length ||
+        x - 15 - index * buttonWidth > buttonWidth - 4) return false;
+    const value = values[index];
+    if (value === widget.value) return true;
+    if (canvas && widget.setValue) widget.setValue(value, {e:event, node, canvas});
+    else {
+      widget.value = value;
+      widget.callback?.(value, canvas, node, [x, y], event);
+    }
+    node.setDirtyCanvas?.(true, true);
+    return true;
+  };
+  widget.onClick = function({e, node, canvas}) {
+    pick(e.canvasX - node.pos[0], e.canvasY - node.pos[1], node, e, canvas);
+  };
+  widget.mouse = function(event, [x, y], node) {
+    if (event.type !== "pointerdown" && event.type !== "mousedown") return false;
+    return pick(x, y, node, event);
+  };
+}
+
 function configurePrepareControls(node) {
   labelImageConnectors(node.inputs);
   const area = node.widgets.find(widget => widget.name === "inpaint_area");
+  const content = node.widgets.find(widget => widget.name === "masked_content");
+  const padding = node.widgets.find(widget => widget.name === "padding");
+  const blur = node.widgets.find(widget => widget.name === "mask_blur");
+  const ordered = [blur, content, area, padding].filter(Boolean);
+  node.widgets.splice(0, node.widgets.length, ...ordered, ...node.widgets.filter(widget => !ordered.includes(widget)));
+  configureChoiceButtons(area);
+  configureChoiceButtons(content);
   const preset = node.widgets.find(widget => widget.name === "generation_size");
   const custom = node.widgets.find(widget => widget.name === "custom_size");
-  const controls = [preset, custom].filter(Boolean);
+  const controls = [padding, preset, custom].filter(Boolean);
   if (preset) preset.label = "Inpaint upscale size";
   const refresh = () => {
     labelImageConnectors(node.inputs);
@@ -1209,7 +1272,23 @@ function configurePrepareControls(node) {
     widget.callback = function() {const result = callback?.apply(this, arguments); refresh(); return result;};
   }
   const configure = node.onConfigure;
-  node.onConfigure = function() {const result = configure?.apply(this, arguments); refresh(); return result;};
+  node.onConfigure = function(info) {
+    const result = configure?.apply(this, arguments);
+    const values = info?.widgets_values;
+    if (values && ["Whole picture", "Only masked"].includes(values[0]) && content && padding) {
+      area.value = values[0];
+      padding.value = values[1];
+      content.value = values[2];
+      if (blur) blur.value = values[3];
+    } else if (values && ["original", "fill"].includes(values[0]) && content && padding) {
+      content.value = values[0];
+      area.value = values[1];
+      padding.value = values[2];
+      if (blur) blur.value = values[3];
+    }
+    refresh();
+    return result;
+  };
   refresh();
 }
 

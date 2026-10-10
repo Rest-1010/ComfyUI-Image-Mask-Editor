@@ -67,6 +67,8 @@ Send inpaint横のKeep editsをオンにすると、転送時に描画とマス�
 
 ### Inpaint Prepareの設定
 
+Inpaint areaとMasked contentは、横並びのボタンで選択します。
+
 - Inpaint areaのWhole pictureは画像全体、Only maskedはマスク周辺だけを生成処理へ渡します。新規ノードの初期値はOnly maskedです。PaddingはOnly maskedで含める周囲の余白です。
 - Masked contentのoriginalは描画込み画像を使い、fillはマスク内を周囲の色で埋めます。初期値はoriginalです。
 - Prepareのmask_blurは数値入力で設定します（0〜64px、初期値4）。0はぼかしなしです。色や編集画面の表示は変わりません。
