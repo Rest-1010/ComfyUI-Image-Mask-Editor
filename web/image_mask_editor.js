@@ -55,6 +55,9 @@ function addStyles() {
     .image-mask-editor__caption { font-size:11px; height:18px; flex:0 0 18px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .image-mask-editor__dimensions { height:14px; flex:0 0 14px; font-size:11px; color:#bbb; text-align:center; line-height:14px; }
     .image-mask-editor__load-tools { display:flex; gap:6px; height:30px; flex:0 0 30px; align-items:center; }
+    .image-mask-editor__keep { display:flex; align-items:center; gap:3px; font-size:11px; white-space:nowrap; }
+    .image-mask-editor__editor-heading { display:flex; justify-content:space-between; align-items:center; height:18px; flex:0 0 18px; gap:6px; }
+    .image-mask-editor__editor-heading .image-mask-editor__caption { flex:1 1 0; min-width:0; }
     .image-mask-editor__tools { display:flex; align-items:center; gap:5px; height:30px; flex:0 0 30px; white-space:nowrap; }
     .image-mask-editor__tools button, .image-mask-editor__load-tools button { display:grid; place-items:center; width:28px; height:28px; min-width:28px; padding:4px; border:1px solid #666; border-radius:4px; background:#303030; color:#eee; cursor:pointer; }
     .image-mask-editor__load-tools button:disabled, .image-mask-editor__tools button:disabled { opacity:0.4; cursor:default; }
@@ -208,10 +211,22 @@ class ImageMaskEditorUI {
     loadTools.className = "image-mask-editor__load-tools";
     const loadButton = this.button("load", "Load image", () => fileInput.click(), loadTools);
     this.sendButton = this.button("send", "Send inpaint", () => {
-      this.transfer = this.setSource(this.previewKey);
+      this.transfer = this.setSource(this.previewKey, !this.keepEdits.checked);
       this.transfer.catch(error => this.reportError(error));
     }, loadTools);
     this.sendButton.disabled = true;
+    this.keepEdits = document.createElement("input");
+    this.keepEdits.type = "checkbox";
+    const keepLabel = document.createElement("label");
+    keepLabel.className = "image-mask-editor__keep";
+    keepLabel.title = "Keep paint and mask when sending an image to the editor";
+    keepLabel.append(this.keepEdits, document.createTextNode("Keep edits"));
+    loadTools.append(keepLabel);
+    this.keepEdits.addEventListener("change", () => {
+      this.node.properties ||= {};
+      this.node.properties.image_mask_editor_keep_edits = this.keepEdits.checked;
+      this.markDirty();
+    });
     this.savePreviewButton = this.button("save", "Save image", () => this.savePreview().catch(error => this.reportError(error)), loadTools);
     this.savePreviewButton.style.marginLeft = "18px";
     this.savePreviewButton.disabled = true;
@@ -276,14 +291,31 @@ class ImageMaskEditorUI {
     const editorCaption = this.editorCaption = document.createElement("div");
     editorCaption.className = "image-mask-editor__caption";
     editorCaption.textContent = `編集画面 — ID: ${node.id}`;
+    this.expandPaint = document.createElement("input");
+    this.expandPaint.type = "checkbox";
+    this.expandPaint.setAttribute("aria-label", "Expand paint mask");
+    const expandLabel = document.createElement("label");
+    expandLabel.className = "image-mask-editor__keep";
+    expandLabel.title = "Expand the paint-derived mask; mask-only strokes and paint colors stay unchanged";
+    expandLabel.append(this.expandPaint, document.createTextNode("Expand paint mask"));
+    expandLabel.addEventListener("pointerdown", event => event.stopPropagation());
+    this.expandPaint.addEventListener("change", () => {
+      this.node.properties ||= {};
+      this.node.properties.image_mask_editor_expand = this.expandPaint.checked;
+      this.markDirty();
+    });
+    const editorHeading = document.createElement("div");
+    editorHeading.className = "image-mask-editor__editor-heading";
+    editorHeading.append(editorCaption, expandLabel);
     this.previewSize = document.createElement("div");
     this.previewSize.className = "image-mask-editor__dimensions";
     this.editorSize = document.createElement("div");
     this.editorSize.className = "image-mask-editor__dimensions";
     left.append(loadTools, this.previewCaption, previewViewport, this.previewSize);
-    right.append(this.tools, editorCaption, this.viewport, this.editorSize);
+    right.append(this.tools, editorHeading, this.viewport, this.editorSize);
     panes.append(left, this.splitter, right);
     this.element.append(panes);
+    this.restoreSettings();
     this.element.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !this.colorPicking) return;
       event.preventDefault();
@@ -442,14 +474,19 @@ class ImageMaskEditorUI {
   async savePreview() {
     const image = this.previewImage;
     if (image.hidden || !image.naturalWidth || !image.naturalHeight) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    canvas.getContext("2d").drawImage(image, 0, 0);
-    const blob = await new Promise((resolve, reject) => canvas.toBlob(value => {
-      if (value) resolve(value);
-      else reject(new Error("画像を保存できませんでした。もう一度試してください。"));
-    }, "image/png"));
+    let blob;
+    if (this.previewKey?.startsWith("data:image/png;base64,")) {
+      blob = await (await fetch(this.previewKey)).blob();
+    } else {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      blob = await new Promise((resolve, reject) => canvas.toBlob(value => {
+        if (value) resolve(value);
+        else reject(new Error("画像を保存できませんでした。もう一度試してください。"));
+      }, "image/png"));
+    }
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -617,12 +654,21 @@ class ImageMaskEditorUI {
     return {scale, x:(this.canvas.width - image.width * scale) / 2 + this.pan.x, y:(this.canvas.height - image.height * scale) / 2 + this.pan.y};
   }
 
-  async setSource(dataUrl) {
+  restoreSettings() {
+    this.keepEdits.checked = this.node.properties?.image_mask_editor_keep_edits === true;
+    this.expandPaint.checked = this.node.properties?.image_mask_editor_expand !== false;
+  }
+
+  async setSource(dataUrl, clearEdits = false) {
     if (!dataUrl) return;
     this.finishStroke();
     this.pendingSource = dataUrl;
     await this.ready;
-    if (dataUrl !== this.pendingSource || dataUrl === this.sourceKey) return;
+    if (dataUrl !== this.pendingSource) return;
+    if (dataUrl === this.sourceKey) {
+      if (clearEdits) this.clear();
+      return;
+    }
     const image = await loadImage(layerUrl(dataUrl));
     if (dataUrl !== this.pendingSource || dataUrl === this.sourceKey) return;
     this.sourceKey = dataUrl;
@@ -642,6 +688,7 @@ class ImageMaskEditorUI {
     this.history = this.resizeHistory(this.history, image.naturalWidth, image.naturalHeight);
     this.redoHistory = this.resizeHistory(this.redoHistory, image.naturalWidth, image.naturalHeight);
     this.trimHistory();
+    if (clearEdits) this.clear();
     this.resetView();
     await this.markDirty();
   }
@@ -688,11 +735,14 @@ class ImageMaskEditorUI {
       throw error;
     }
     if (request !== this.previewRequest) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    canvas.getContext("2d").drawImage(image, 0, 0);
-    this.previewKey = canvas.toDataURL("image/png");
+    if (url.startsWith("data:image/png;base64,")) this.previewKey = url;
+    else {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      this.previewKey = canvas.toDataURL("image/png");
+    }
     this.previewName = name;
     this.previewSize.textContent = `${image.naturalWidth}×${image.naturalHeight}`;
     this.restoredPreviewView = null;
@@ -1052,19 +1102,18 @@ class ImageMaskEditorUI {
     if (this.executionRevision === this.saveRevision && this.executionData) return this.executionData;
     let source = "";
     if (this.background) {
-      if (this.sourceKey.startsWith("data:image/png;base64,")) source = this.sourceKey;
-      else {
-        const canvas = document.createElement("canvas");
-        canvas.width = this.background.naturalWidth;
-        canvas.height = this.background.naturalHeight;
-        canvas.getContext("2d").drawImage(this.background, 0, 0);
-        source = canvas.toDataURL("image/png");
-      }
+      // Keep generation metadata on the preview, not recursively inside the next prompt's source PNG.
+      const canvas = document.createElement("canvas");
+      canvas.width = this.background.naturalWidth;
+      canvas.height = this.background.naturalHeight;
+      canvas.getContext("2d").drawImage(this.background, 0, 0);
+      source = canvas.toDataURL("image/png");
     }
     this.executionData = JSON.stringify({
       paint:this.layers[0].toDataURL("image/png"),
       mask:this.layers[1].toDataURL("image/png"),
       source,
+      expand:this.expandPaint?.checked ?? true,
     });
     this.executionRevision = this.saveRevision;
     return this.executionData;
@@ -1132,6 +1181,38 @@ function addPaintWidget(node) {
   return widget;
 }
 
+function labelImageConnectors(slots) {
+  for (const slot of slots || []) {
+    if (slot.name === "image" || slot.name === "edit image") slot.label = "edit image";
+    if (slot.name === "original" || slot.name === "original image") slot.label = "original image";
+  }
+}
+
+function configurePrepareControls(node) {
+  labelImageConnectors(node.inputs);
+  const area = node.widgets.find(widget => widget.name === "inpaint_area");
+  const preset = node.widgets.find(widget => widget.name === "generation_size");
+  const custom = node.widgets.find(widget => widget.name === "custom_size");
+  const controls = [preset, custom].filter(Boolean);
+  if (preset) preset.label = "Inpaint upscale size";
+  const refresh = () => {
+    labelImageConnectors(node.inputs);
+    for (const widget of controls) {
+      widget.disabled = area.value !== "Only masked" || (widget === custom && preset.value !== "Custom");
+      widget.options = {...widget.options, serialize:true};
+    }
+    node.updateComputedDisabled?.();
+    app.graph?.setDirtyCanvas(true, true);
+  };
+  for (const widget of [area, preset].filter(Boolean)) {
+    const callback = widget.callback;
+    widget.callback = function() {const result = callback?.apply(this, arguments); refresh(); return result;};
+  }
+  const configure = node.onConfigure;
+  node.onConfigure = function() {const result = configure?.apply(this, arguments); refresh(); return result;};
+  refresh();
+}
+
 app.registerExtension({
   name:"image-mask-editor",
   init() {
@@ -1159,6 +1240,10 @@ app.registerExtension({
     workflowSessions.delete(workflow);
   },
   nodeCreated(node) {
+    if (node.comfyClass === "ImageMaskEditorPrepare" || node.type === "ImageMaskEditorPrepare") {
+      configurePrepareControls(node);
+      return;
+    }
     if (node.comfyClass === "ImageMaskEditorPreview" || node.type === "ImageMaskEditorPreview") {
       const target = node.widgets.find(widget => widget.name === "target");
       target.type = "combo";
@@ -1177,6 +1262,7 @@ app.registerExtension({
       return;
     }
     if (node.comfyClass !== TYPE && node.type !== TYPE) return;
+    labelImageConnectors(node.outputs);
     const paintWidget = addPaintWidget(node);
     node.sketchEditor = new ImageMaskEditorUI(node, paintWidget);
     const onExecuted = node.onExecuted;
@@ -1204,6 +1290,8 @@ app.registerExtension({
       const result = onConfigure?.apply(this, arguments);
       this.sketchEditor.editorCaption.textContent = `編集画面 — ID: ${this.id}`;
       this.sketchEditor.restoreSplitRatio();
+      this.sketchEditor.restoreSettings();
+      labelImageConnectors(this.outputs);
       this.setSize(this.size);
       this.sketchEditor.ready = this.sketchEditor.restoreLayers();
       this.sketchEditor.ready.catch(error => console.error("Image & Mask Editor:", error));

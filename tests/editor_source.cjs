@@ -102,6 +102,22 @@ test("a late older preview cannot replace the newest input image", async () => {
   assert.equal(instance.sourceKey, "recent");
 });
 
+test("a successful transfer clears edits only after loading; a failed transfer does not", async () => {
+  const {instance, complete, fail} = editor();
+  let clears = 0;
+  instance.clear = () => {clears++; assert.equal(instance.background.url, "new");};
+  const transfer = instance.setSource("new", true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(clears, 0);
+  complete("new"); await transfer;
+  assert.equal(clears, 1);
+  const failed = instance.setSource("missing", true);
+  const rejection = assert.rejects(failed);
+  await new Promise(resolve => setImmediate(resolve));
+  fail("missing"); await rejection;
+  assert.equal(clears, 1);
+});
+
 test("different image dimensions resize both undo and redo snapshots", () => {
   const {instance} = editor();
   const old = {width:800, height:400, patches:["paint", "mask"].map((name, index) =>
@@ -208,4 +224,13 @@ test("left and right dimensions track their own images independently", async () 
   instance.showMissingPreview();
   assert.equal(instance.previewSize.textContent, "");
   assert.equal(instance.editorSize.textContent, "1024×768");
+});
+
+test("PNG preview data remains byte-for-byte intact, including generation metadata", async () => {
+  const {instance, complete} = editor();
+  const url = "data:image/png;base64,with-metadata";
+  const loaded = instance.setPreview(url);
+  await new Promise(resolve => setImmediate(resolve));
+  complete(url); await loaded;
+  assert.equal(instance.previewKey, url);
 });

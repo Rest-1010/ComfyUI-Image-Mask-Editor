@@ -37,3 +37,16 @@ test("out of range values are clamped only when committed", () => {
   instance.setBrushSize("0", true);
   assert.equal(instance.size.value, "1");
 });
+
+test("expansion and retention settings default and restore independently of pixel state", () => {
+  const instance = editor();
+  Object.assign(instance, {node:{properties:{}}, keepEdits:{}, expandPaint:{}, markDirty() {}});
+  instance.restoreSettings();
+  assert.equal(instance.keepEdits.checked, false);
+  assert.equal(instance.expandPaint.checked, true);
+  instance.node.properties.image_mask_editor_keep_edits = true;
+  instance.node.properties.image_mask_editor_expand = false;
+  instance.restoreSettings();
+  assert.equal(instance.keepEdits.checked, true);
+  assert.equal(instance.expandPaint.checked, false);
+});

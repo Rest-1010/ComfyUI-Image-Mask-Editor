@@ -146,3 +146,24 @@ test("clear restores both layers and changes outside a patch are untouched", () 
   editor.undo();
   assert.equal(editor.layers[0].data.at(-1), 33);
 });
+
+test("sending the same image with Keep edits off adds an undoable clear, not a background undo", async () => {
+  const editor = pixelEditor();
+  editor.ready = Promise.resolve();
+  editor.sourceKey = "same";
+  editor.background = {name:"new background"};
+  editor.strokeTiles = new Map();
+  editor.captureTiles(0, 0, 10, 10, [0, 1]);
+  editor.layers[0].data[0] = 7;
+  editor.layers[1].data[0] = 9;
+  editor.remember();
+  await editor.setSource("same", true);
+  assert.equal(editor.history.length, 2);
+  assert.equal(editor.layers[0].data[0], 0);
+  editor.undo();
+  assert.equal(editor.layers[0].data[0], 7);
+  assert.equal(editor.layers[1].data[0], 9);
+  assert.equal(editor.background.name, "new background");
+  editor.redo();
+  assert.equal(editor.layers[1].data[0], 0);
+});
