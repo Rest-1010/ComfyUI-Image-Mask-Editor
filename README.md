@@ -108,6 +108,14 @@ Inpaint areaとMasked contentは、横並びのボタンで選択します。
 
 - 「画像が見つかりません。Load imageから読み込み直してください」と表示された場合は、Load imageから画像を読み込み直してください。読み込みが成功するまでSend inpaintは使えません。
 
+## 更新履歴
+
+### 1.0.8
+
+- Inpaint PrepareのInpaint areaとMasked contentを、横並びの選択ボタンに変更しました。
+- 設定項目をMask blur、Masked content、Inpaint area、Paddingの順に並べ替えました。
+- Whole picture選択時は、Paddingをグレーアウトするようにしました。
+
 ## ライセンス
 
 Copyright (c) 2026 Rest-1010
